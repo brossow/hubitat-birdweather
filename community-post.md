@@ -44,7 +44,7 @@ Search HPM for "BirdWeather PUC" and install.
 
 ### Finding your Station ID
 
-The Station ID is the number in the URL when viewing your station at [app.birdweather.com](https://app.birdweather.com) — e.g. `app.birdweather.com/stations/25574` → ID is `25574`.
+The Station ID is the number in the URL when viewing your station at [app.birdweather.com](https://app.birdweather.com) — e.g. `app.birdweather.com/stations/12345` → ID is `12345`.
 
 ### API Token
 
@@ -103,7 +103,7 @@ Set up these variables in your tile's Variables section, all pointing to your Bi
 ### Basic Settings
 
 Before importing, change at minimum:
-- `#tt#:Birds at Riverside` → your tile title
+- `#tt#:My Bird Station` → your tile title
 - The station ID inside `#ft#` (the footer link) → your station ID
 
 > **Note on tile ID:** The override CSS uses `.qq` throughout, which matches the default tile ID `qq`. If you change `#id#`, update the CSS class names in the Overrides to match.
@@ -111,7 +111,7 @@ Before importing, change at minimum:
 > **Note:** The `Import Style` button may silently fail — if nothing changes after importing, enter the key settings manually (colors, font size, borders, etc.).
 
 ```
-[#R0C1#: , #R0C2#:Last Detection, #R0C3#:Today, #R0C4#:Other 2, #R0C5#:Other 3, #bc#:#334155, #bfs#:18, #bm#:Collapse, #bo#:0.2, #bp#:6, #br#:2, #bs#:Solid, #bw#:1, #comment#:?, #fa#:Center, #fbc#:#1e3a5f, #fc#:#6ee7b7, #fs#:75, #ft#:[a href='https://app.birdweather.com/stations/YOUR_STATION_ID' target='_blank']View on BirdWeather[/a], #hbc#:#111827, #hbo#:1, #htc#:#6ee7b7, #hto#:1, #hts#:85, #hp#:0, #hta#:Center, #iFrameColor#:#1c2333, #id#:qq, #isAlternateRows#:true, #isBorder#:true, #isFooter#:true, #isFrame#:true, #isHeaders#:true, #isOverrides#:true, #isTitle#:true, #rabc#:#253044, #ratc#:#e2e8f0, #rbc#:#1e293b, #rbo#:0, #rp#:0, #rta#:Center, #rtc#:#e2e8f0, #rto#:1, #rts#:90, #ta#:Center, #tbc#:#1c2333, #tbo#:0.9, #tc#:#f8fafc, #tff#:Arial, #th#:Auto, #to#:1, #tp#:8, #ts#:200, #tt#:Birds at Riverside, #tw#:100]
+[#R0C1#: , #R0C2#:Last Detection, #R0C3#:Today, #R0C4#:Other 2, #R0C5#:Other 3, #bc#:#334155, #bfs#:18, #bm#:Collapse, #bo#:0.2, #bp#:6, #br#:2, #bs#:Solid, #bw#:1, #comment#:?, #fa#:Center, #fbc#:#1e3a5f, #fc#:#6ee7b7, #fs#:75, #ft#:[a href='https://app.birdweather.com/stations/12345' target='_blank']View on BirdWeather[/a], #hbc#:#111827, #hbo#:1, #htc#:#6ee7b7, #hto#:1, #hts#:85, #hp#:0, #hta#:Center, #iFrameColor#:#1c2333, #id#:qq, #isAlternateRows#:true, #isBorder#:true, #isFooter#:true, #isFrame#:true, #isHeaders#:true, #isOverrides#:true, #isTitle#:true, #rabc#:#253044, #ratc#:#e2e8f0, #rbc#:#1e293b, #rbo#:0, #rp#:0, #rta#:Center, #rtc#:#e2e8f0, #rto#:1, #rts#:90, #ta#:Center, #tbc#:#1c2333, #tbo#:0.9, #tc#:#f8fafc, #tff#:Arial, #th#:Auto, #to#:1, #tp#:8, #ts#:200, #tt#:My Bird Station, #tw#:100]
 ```
 
 ### Overrides
