@@ -20,13 +20,13 @@
  * ── AUTOMATION IDEAS ──────────────────────────────────────────────────────
  *  • "birdDetected" event fires on every new detection → announce on speaker
  *  • "newSpeciesDetected" event fires for first sighting of a species today
- *  • "lastCertainty" = "almost_certain" filter → only high-confidence alerts
+ *  • "lastCertainty" = "Almost Certain" filter → only high-confidence alerts
  *  • "todaySpecies" attribute → display on a dashboard tile
  *  • Rule Machine: IF newSpeciesDetected THEN send push notification with
  *    "%value% (%lastSpeciesScientific%)" as the message text
  */
 
-private String getDriverVersion() { return "1.0.0" }
+private String getDriverVersion() { return "1.1.0" }
 
 metadata {
     definition(
@@ -42,8 +42,9 @@ metadata {
         attribute "lastSpecies",          "string"   // Common name
         attribute "lastSpeciesScientific","string"   // Scientific name
         attribute "lastConfidence",       "number"   // Detection confidence 0–100 %
-        attribute "lastCertainty",        "string"   // almost_certain / very_likely / uncertain / unlikely
+        attribute "lastCertainty",        "string"   // Almost Certain / Very Likely / Uncertain / Unlikely
         attribute "lastDetectedAt",       "string"   // ISO 8601 timestamp
+        attribute "lastDetectedTime",     "string"   // Display-friendly time (e.g. "10:47 AM")
         attribute "lastSpeciesImageUrl",  "string"   // Species thumbnail
         attribute "lastSoundscapeUrl",    "string"   // Audio clip URL (if available)
 
@@ -61,6 +62,9 @@ metadata {
         // ── All-Time Totals ───────────────────────────────────────────────
         attribute "totalSpecies",         "number"
         attribute "totalDetections",      "number"
+
+        // ── Today's Species List ──────────────────────────────────────────
+        attribute "todaySpeciesList",     "string"   // JSON array of species names seen today
 
         // ── Automation Trigger Events (also appear in event log) ──────────
         // birdDetected       — every new detection; value = common name
@@ -111,6 +115,11 @@ preferences {
         description: "Filters 'birdDetected' and 'newSpeciesDetected' events",
         options:     ["all", "very_likely", "almost_certain"],
         defaultValue:"all"
+
+    input "nightModeEnable", "bool",
+        title:       "Pause polling at night",
+        description: "Skip polls between sunset and sunrise (birds aren't active anyway)",
+        defaultValue: false
 
     input "logEnable", "bool",
         title:       "Enable Debug Logging",
@@ -176,6 +185,14 @@ def poll() {
         log.warn "BirdWeather PUC: poll skipped — no station ID"
         return
     }
+    if (nightModeEnable) {
+        def sun = getSunriseAndSunset()
+        def now = new Date()
+        if (now.before(sun.sunrise) || now.after(sun.sunset)) {
+            debugLog "Night mode: skipping poll (outside sunrise/sunset window)"
+            return
+        }
+    }
     maybeResetDailyTracking()
     fetchDetections()
     fetchDayStats()
@@ -183,15 +200,22 @@ def poll() {
     fetchTopSpecies()
 }
 
+def retryPoll() {
+    state.retryScheduled = false
+    log.info "BirdWeather PUC: retrying after transient error"
+    poll()
+}
+
 def resetHistory() {
     log.info "BirdWeather PUC: resetting all state and attributes"
     state.clear()
     [
         "lastSpecies", "lastSpeciesScientific", "lastCertainty",
-        "lastDetectedAt", "lastSpeciesImageUrl", "lastSoundscapeUrl",
+        "lastDetectedAt", "lastDetectedTime", "lastSpeciesImageUrl", "lastSoundscapeUrl",
         "recentDetections", "topSpeciesToday",
         "birdDetected", "newSpeciesDetected", "lastPollStatus", "lastPollTime"
     ].each { sendEvent(name: it, value: "—") }
+    sendEvent(name: "todaySpeciesList", value: "[]")
     ["lastConfidence", "todaySpecies", "todayDetections",
      "topSpeciesCount", "totalSpecies", "totalDetections"
     ].each { sendEvent(name: it, value: 0) }
@@ -206,6 +230,7 @@ private maybeResetDailyTracking() {
         debugLog "New day (${today}) — resetting daily species tracking"
         state.todaySpeciesSeen = []
         state.trackingDate     = today
+        sendEvent(name: "todaySpeciesList", value: "[]")
     }
 }
 
@@ -253,9 +278,15 @@ private fetchTopSpecies() {
 
 def handleDetectionsResponse(response, data) {
     if (response.hasError()) {
-        def msg = "Error: HTTP ${response.status}"
+        def status = response.status
+        def msg = "Error: HTTP ${status}"
         log.warn "BirdWeather detections API — ${msg}"
         sendEvent(name: "lastPollStatus", value: msg)
+        if ((status == 408 || status >= 500) && !state.retryScheduled) {
+            state.retryScheduled = true
+            log.info "BirdWeather PUC: scheduling retry in 60 seconds"
+            runIn(60, "retryPoll")
+        }
         return
     }
 
@@ -292,31 +323,27 @@ def handleDetectionsResponse(response, data) {
         }
         sendEvent(name: "recentDetections", value: groovy.json.JsonOutput.toJson(recentList))
 
-        if (!detections) {
-            sendEvent(name: "lastPollStatus", value: "OK")
-            sendEvent(name: "lastPollTime",   value: nowStr())
-            return
-        }
-
         // ── Latest detection attributes ────────────────────────────────────
         def latest     = detections[0]
         def latestId   = latest?.id?.toString()
         def lastSeenId = state.lastDetectionId ?: ""
 
-        def sp         = latest.species ?: [:]
-        def commonName = speciesName(sp)
-        def sciName    = scientificName(sp)
-        def confidence = pct(latest.confidence)
-        def certainty  = latest.certainty ?: "—"
-        def timestamp  = latest.timestamp ?: "—"
-        def imgUrl     = imageUrl(sp)
-        def soundUrl   = latest.soundscape?.url ?: ""
+        def sp           = latest.species ?: [:]
+        def commonName   = speciesName(sp)
+        def sciName      = scientificName(sp)
+        def confidence   = pct(latest.confidence)
+        def certaintyRaw = latest.certainty ?: ""
+        def certainty    = formatCertainty(certaintyRaw)
+        def timestamp    = latest.timestamp ?: "—"
+        def imgUrl       = imageUrl(sp)
+        def soundUrl     = latest.soundscape?.url ?: ""
 
         sendEvent(name: "lastSpecies",          value: commonName)
         sendEvent(name: "lastSpeciesScientific", value: sciName)
         sendEvent(name: "lastConfidence",        value: confidence, unit: "%")
         sendEvent(name: "lastCertainty",         value: certainty)
         sendEvent(name: "lastDetectedAt",        value: timestamp)
+        sendEvent(name: "lastDetectedTime",      value: formatDetectionTime(timestamp))
         if (imgUrl)   sendEvent(name: "lastSpeciesImageUrl", value: imgUrl)
         if (soundUrl) sendEvent(name: "lastSoundscapeUrl",   value: soundUrl)
 
@@ -325,7 +352,7 @@ def handleDetectionsResponse(response, data) {
             state.lastDetectionId = latestId
             debugLog "New detection: ${commonName} (${confidence}%, ${certainty})"
 
-            if (passesEventFilter(certainty, latest.confidence)) {
+            if (passesEventFilter(certaintyRaw, latest.confidence)) {
                 sendEvent(
                     name:            "birdDetected",
                     value:           commonName,
@@ -336,6 +363,7 @@ def handleDetectionsResponse(response, data) {
                 if (!(commonName in seenToday)) {
                     seenToday << commonName
                     state.todaySpeciesSeen = seenToday
+                    sendEvent(name: "todaySpeciesList", value: groovy.json.JsonOutput.toJson(seenToday))
                     sendEvent(
                         name:            "newSpeciesDetected",
                         value:           commonName,
@@ -440,6 +468,35 @@ private boolean passesEventFilter(String certainty, confidence) {
     if (filter == "all") return true
     def rank = [unlikely: 0, uncertain: 1, very_likely: 2, almost_certain: 3]
     return (rank[certainty] ?: 0) >= (rank[filter] ?: 0)
+}
+
+private String formatCertainty(String raw) {
+    switch (raw) {
+        case "almost_certain": return "Almost Certain"
+        case "very_likely":    return "Very Likely"
+        case "uncertain":      return "Uncertain"
+        case "unlikely":       return "Unlikely"
+        default:               return raw ?: "—"
+    }
+}
+
+private String formatDetectionTime(String isoTimestamp) {
+    if (!isoTimestamp || isoTimestamp == "—") return "—"
+    try {
+        def inFmt  = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+        def outFmt = new java.text.SimpleDateFormat("h:mm a")
+        outFmt.setTimeZone(location.timeZone)
+        return outFmt.format(inFmt.parse(isoTimestamp))
+    } catch (e1) {
+        try {
+            def inFmt  = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX")
+            def outFmt = new java.text.SimpleDateFormat("h:mm a")
+            outFmt.setTimeZone(location.timeZone)
+            return outFmt.format(inFmt.parse(isoTimestamp))
+        } catch (e2) {
+            return isoTimestamp
+        }
+    }
 }
 
 /** Converts 0.0–1.0 confidence to an integer percentage. Guards against APIs returning 0–100 directly. */

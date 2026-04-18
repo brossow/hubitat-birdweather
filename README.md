@@ -25,11 +25,13 @@ The longer API Token shown under Advanced Settings in the BirdWeather app is onl
 | `lastSpecies` | Common name of the most recently detected bird |
 | `lastSpeciesScientific` | Scientific name |
 | `lastConfidence` | Detection confidence (0–100 %) |
-| `lastCertainty` | `almost_certain` / `very_likely` / `uncertain` / `unlikely` |
+| `lastCertainty` | `Almost Certain` / `Very Likely` / `Uncertain` / `Unlikely` |
 | `lastDetectedAt` | ISO 8601 timestamp of the detection |
+| `lastDetectedTime` | Display-friendly local time of the detection (e.g. `10:47 AM`) |
 | `lastSpeciesImageUrl` | Thumbnail URL for the species |
 | `lastSoundscapeUrl` | URL of the audio clip that triggered the detection |
 | `recentDetections` | JSON array of the last N detections (configurable) |
+| `todaySpeciesList` | JSON array of all species names detected today |
 | `todaySpecies` | Number of unique species detected today |
 | `todayDetections` | Total detection count today |
 | `topSpeciesToday` | Most-detected species today |
@@ -62,6 +64,7 @@ The daily species list resets at midnight in your hub's time zone.
 | **Recent Detections to Track** | Depth of the `recentDetections` JSON history (3–20) |
 | **Minimum Confidence %** | Ignore detections below this threshold (0 = accept all) |
 | **Fire events only for certainty level ≥** | Filter `birdDetected`/`newSpeciesDetected` events by BirdWeather's certainty label |
+| **Pause polling at night** | Skip polls between sunset and sunrise |
 | **Enable Debug Logging** | Verbose logging in the hub's log viewer |
 
 ## Automation Ideas
