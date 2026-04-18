@@ -12,9 +12,7 @@ By [Brent Rossow](https://github.com/brossow). Integrates your [BirdWeather PUC]
 
 ### Finding Your Station ID
 
-Your Station ID is the number in the URL when viewing your station at [app.birdweather.com](https://app.birdweather.com) — e.g. `app.birdweather.com/stations/25574` → Station ID is `25574`.
-
-You don't have to use your own station. Any public BirdWeather station works — a local nature center, a favorite birding spot, or just the most active station in your area. Station IDs can also be found by browsing the map in the BirdWeather app.
+Your Station ID is the number in the URL when viewing your station at [app.birdweather.com](https://app.birdweather.com) — e.g. `app.birdweather.com/stations/25574` → Station ID is `25574`. You can also find it in the BirdWeather app under your station's settings.
 
 ### API Token (optional)
 
