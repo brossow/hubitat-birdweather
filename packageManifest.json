@@ -6,7 +6,7 @@
   "dateReleased": "2026-04-17",
   "releaseNotes": "Adds todaySpeciesList attribute, night mode polling option, and automatic retry on transient API errors.",
   "documentationLink": "https://github.com/brossow/hubitat-birdweather",
-  "communityLink": "",
+  "communityLink": "https://community.hubitat.com/t/release-birdweather-puc-driver/163303",
   "apps": [],
   "drivers": [
     {
