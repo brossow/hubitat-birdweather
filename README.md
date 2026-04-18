@@ -89,6 +89,8 @@ Add `lastSpecies`, `todaySpecies`, and `todayDetections` as tiles using the Attr
 
 [Tile Builder](https://community.hubitat.com/t/release-tile-builder-build-beautiful-dashboards/118822) by @garyjmilne can display all of this driver's data in a single rich dashboard tile — species photo, last detection details, and today's summary side by side. The Grid layout (which enables multi-column tiles) requires a license ($12 minimum donation, unlocked in the Tile Builder app).
 
+![Tile Builder dashboard tile](BirdWeather_TileBuilder_screenshot.png)
+
 See the [community forum post](https://community.hubitat.com/t/release-birdweather-puc-driver/163303) for a complete style example including the variable layout, override CSS, and setup notes.
 
 ## API Reference
