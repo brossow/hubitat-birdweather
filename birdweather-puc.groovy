@@ -22,11 +22,12 @@
  *  • "newSpeciesDetected" event fires for first sighting of a species today
  *  • "lastCertainty" = "Almost Certain" filter → only high-confidence alerts
  *  • "todaySpecies" attribute → display on a dashboard tile
+ *  • "lifetimeSpeciesList" → ever-growing JSON array of all species detected since install
  *  • Rule Machine: IF newSpeciesDetected THEN send push notification with
  *    "%value% (%lastSpeciesScientific%)" as the message text
  */
 
-private String getDriverVersion() { return "1.1.0" }
+private String getDriverVersion() { return "1.2.0" }
 
 metadata {
     definition(
@@ -59,12 +60,13 @@ metadata {
         attribute "topSpeciesToday",      "string"   // Most-detected species (common name)
         attribute "topSpeciesCount",      "number"   // Detection count for top species
 
-        // ── All-Time Totals ───────────────────────────────────────────────
-        attribute "totalSpecies",         "number"
-        attribute "totalDetections",      "number"
-
         // ── Today's Species List ──────────────────────────────────────────
         attribute "todaySpeciesList",     "string"   // JSON array of species names seen today
+
+        // ── Lifetime Totals (driver-tracked, never resets) ───────────────
+        attribute "lifetimeSpecies",      "number"   // Unique species ever detected since driver install
+        attribute "lifetimeDetections",   "number"   // Total detections since driver install
+        attribute "lifetimeSpeciesList",  "string"   // JSON array of all species, sorted alphabetically
 
         // ── Automation Trigger Events (also appear in event log) ──────────
         // birdDetected       — every new detection; value = common name
@@ -79,6 +81,7 @@ metadata {
 
         command "refresh"
         command "resetHistory"
+        command "setLifetimeDetections", [[name: "count", type: "NUMBER", description: "Set starting detection count (e.g. from BirdWeather Data Explorer)"]]
     }
 }
 
@@ -151,6 +154,22 @@ def initialize() {
     }
     sendEvent(name: "driverVersion", value: driverVersion)
     schedulePolling()
+    if (state.lifetimeSpeciesSeen == null) {
+        def seed = (state.todaySpeciesSeen ?: []).collect { it }
+        state.lifetimeSpeciesSeen = seed
+        if (seed) {
+            sendEvent(name: "lifetimeSpeciesList", value: groovy.json.JsonOutput.toJson(seed.sort()))
+            sendEvent(name: "lifetimeSpecies",     value: seed.size())
+            log.info "BirdWeather: seeded lifetime species list with ${seed.size()} species from today's tracking"
+        }
+    }
+    if (state.lifetimeDetectionCount == null) {
+        state.lifetimeDetectionCount = 0
+    }
+    if (state.lifetimeSpeciesCount == null) {
+        state.lifetimeSpeciesCount = state.lifetimeSpeciesSeen?.size() ?: 0
+    }
+
     runIn(3, refresh)
 }
 
@@ -196,7 +215,6 @@ def poll() {
     maybeResetDailyTracking()
     fetchDetections()
     fetchDayStats()
-    fetchAllTimeStats()
     fetchTopSpecies()
 }
 
@@ -215,11 +233,19 @@ def resetHistory() {
         "recentDetections", "topSpeciesToday",
         "birdDetected", "newSpeciesDetected", "lastPollStatus", "lastPollTime"
     ].each { sendEvent(name: it, value: "—") }
-    sendEvent(name: "todaySpeciesList", value: "[]")
+    sendEvent(name: "todaySpeciesList",    value: "[]")
+    sendEvent(name: "lifetimeSpeciesList", value: "[]")
     ["lastConfidence", "todaySpecies", "todayDetections",
-     "topSpeciesCount", "totalSpecies", "totalDetections"
+     "topSpeciesCount", "lifetimeSpecies", "lifetimeDetections"
     ].each { sendEvent(name: it, value: 0) }
     runIn(2, refresh)
+}
+
+def setLifetimeDetections(count) {
+    def n = count?.toLong() ?: 0
+    state.lifetimeDetectionCount = n
+    sendEvent(name: "lifetimeDetections", value: n)
+    log.info "BirdWeather: lifetime detection count set to ${n}"
 }
 
 // ── Daily Tracking Reset ────────────────────────────────────────────────────
@@ -260,12 +286,6 @@ private fetchDayStats() {
     asynchttpGet("handleDayStatsResponse",
         buildParams("https://app.birdweather.com/api/v1/stations/${stationId}/stats",
                     [period: "day"]))
-}
-
-private fetchAllTimeStats() {
-    asynchttpGet("handleAllTimeStatsResponse",
-        buildParams("https://app.birdweather.com/api/v1/stations/${stationId}/stats",
-                    [period: "all"]))
 }
 
 private fetchTopSpecies() {
@@ -352,6 +372,10 @@ def handleDetectionsResponse(response, data) {
             state.lastDetectionId = latestId
             debugLog "New detection: ${commonName} (${confidence}%, ${certainty})"
 
+            def newLifetimeCount = (state.lifetimeDetectionCount ?: 0) + 1
+            state.lifetimeDetectionCount = newLifetimeCount
+            sendEvent(name: "lifetimeDetections", value: newLifetimeCount)
+
             if (passesEventFilter(certaintyRaw, latest.confidence)) {
                 sendEvent(
                     name:            "birdDetected",
@@ -371,6 +395,17 @@ def handleDetectionsResponse(response, data) {
                     )
                     log.info "BirdWeather: first ${commonName} today — ${seenToday.size()} species so far"
                 }
+
+                def seenLifetime = state.lifetimeSpeciesSeen ?: []
+                if (!(commonName in seenLifetime)) {
+                    seenLifetime << commonName
+                    state.lifetimeSpeciesSeen = seenLifetime
+                    def newCount = (state.lifetimeSpeciesCount ?: 0) + 1
+                    state.lifetimeSpeciesCount = newCount
+                    sendEvent(name: "lifetimeSpeciesList", value: groovy.json.JsonOutput.toJson(seenLifetime.sort()))
+                    sendEvent(name: "lifetimeSpecies",     value: newCount)
+                    log.info "BirdWeather: new lifetime species — ${commonName} (${newCount} total)"
+                }
             } else {
                 debugLog "Event suppressed by certainty filter: ${certainty}"
             }
@@ -387,31 +422,20 @@ def handleDetectionsResponse(response, data) {
 
 def handleDayStatsResponse(response, data) {
     if (response.hasError()) {
-        debugLog "Day stats API returned HTTP ${response.status} — skipping"
+        log.warn "BirdWeather: day stats API returned HTTP ${response.status} — skipping"
         return
     }
     try {
         def json = response.json
+        if (json?.success == false) {
+            log.warn "BirdWeather: day stats API returned success=false — response: ${json}"
+            return
+        }
         if (json?.species    != null) sendEvent(name: "todaySpecies",    value: json.species)
         if (json?.detections != null) sendEvent(name: "todayDetections", value: json.detections)
         debugLog "Day stats: ${json?.species} species, ${json?.detections} detections"
     } catch (Exception e) {
         log.error "BirdWeather: error parsing day stats — ${e.message}"
-    }
-}
-
-def handleAllTimeStatsResponse(response, data) {
-    if (response.hasError()) {
-        debugLog "All-time stats API returned HTTP ${response.status} — skipping"
-        return
-    }
-    try {
-        def json = response.json
-        if (json?.species    != null) sendEvent(name: "totalSpecies",    value: json.species)
-        if (json?.detections != null) sendEvent(name: "totalDetections", value: json.detections)
-        debugLog "All-time stats: ${json?.species} species, ${json?.detections} detections"
-    } catch (Exception e) {
-        log.error "BirdWeather: error parsing all-time stats — ${e.message}"
     }
 }
 
