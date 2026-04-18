@@ -79,11 +79,17 @@ The daily species list resets at midnight in your hub's time zone.
 
 **Flash a light on a rare/high-confidence sighting:**
 > Rule Machine → Trigger: `birdDetected` changes  
-> Condition: `lastCertainty` = `almost_certain`  
+> Condition: `lastCertainty` = `Almost Certain`  
 > Action: Flash [light device] 3 times
 
 **Dashboard tile:**  
-Add `lastSpecies`, `todaySpecies`, and `todayDetections` as tiles using the Attribute template.
+Add `lastSpecies`, `todaySpecies`, and `todayDetections` as tiles using the Attribute template. For a richer display — species photo, detection time, and today's stats in a single tile — see [Tile Builder Grid](#tile-builder-grid) below.
+
+## Tile Builder Grid
+
+[Tile Builder](https://community.hubitat.com/t/release-tile-builder-build-beautiful-dashboards/118822) by @garyjmilne can display all of this driver's data in a single rich dashboard tile — species photo, last detection details, and today's summary side by side. The Grid layout (which enables multi-column tiles) requires a license ($12 minimum donation, unlocked in the Tile Builder app).
+
+See the [community forum post](#) for a complete style example including the variable layout, override CSS, and setup notes.
 
 ## API Reference
 
